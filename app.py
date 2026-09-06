@@ -1,6 +1,6 @@
-import os
 import asyncio
-from flask import Flask, request, send_file
+import os
+from flask import Flask, render_template_string, request, send_file
 import edge_tts
 
 app = Flask(__name__)
@@ -13,14 +13,14 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NyiHlaingBwarVoice</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
-        .container { max-width: 400px; margin: auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        textarea { width: 100%; height: 140px; margin-bottom: 5px; padding: 10px; box-sizing: border-box; }
-        select { width: 100%; padding: 10px; margin-bottom: 10px; }
-        label { font-weight: bold; display: block; margin-top: 10px; }
-        .char-count { font-size: 12px; color: #666; text-align: right; margin-bottom: 10px; }
-        .limit-warning { color: red; font-weight: bold; }
-        button { width: 100%; padding: 12px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top: 10px; }
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        h2 { text-align: center; color: #333; }
+        label { display: block; margin-top: 10px; font-weight: bold; color: #555; }
+        select, textarea, button { width: 100%; margin-top: 5px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        textarea { height: 120px; resize: vertical; }
+        .char-count { text-align: right; font-size: 12px; color: #777; margin-top: 4px; }
+        button { background-color: #007bff; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 15px; }
         button:hover { background-color: #0056b3; }
         audio { width: 100%; margin-top: 15px; }
     </style>
@@ -29,25 +29,21 @@ HTML_TEMPLATE = """
     <div class="container">
         <h2>NyiHlaingBwarVoice</h2>
         <form method="POST">
-            <label for="voice">အသံအမျိုးအစား ရွေးရန်:</label>
-            <select name="voice" id="voice">
+            <label>အသံအမျိုးအစား ရွေးရန်:</label>
+            <select name="voice">
                 <option value="my-MM-NilarNeural">မြန်မာ (Nilar - အမျိုးသမီး)</option>
-                <option value="my-MM-ThihaNeural">မြန်မာ (Thiha - အမျိုးသား)</option>
-                <option value="en-US-AvaNeural">English (US - Ava)</option>
-                <option value="en-US-AndrewNeural">English (US - Andrew)</option>
             </select>
 
-            <label for="rate">အသံအမြန်နှုန်း (Speed):</label>
-            <select name="rate" id="rate">
-                <option value="-25%">-25% (နှေး)</option>
-                <option value="+0%" selected>+0% (ပုံမှန်)</option>
-                <option value="+10%">+10% (မြန်)</option>
-                <option value="+25%">+25% (ပိုမြန်)</option>
+            <label>အသံအမြန်နှုန်း (Speed):</label>
+            <select name="rate">
+                <option value="+0%">+0% (ပုံမှန်)</option>
+                <option value="+10%">+10% (အနည်းငယ်မြန်)</option>
+                <option value="-10%">-10% (အနည်းငယ်နှေး)</option>
             </select>
 
-            <label for="text">ပြောမည့်စာသားကို ထည့်ပါ:</label>
-            <textarea name="text" id="text" placeholder="ဒီမှာ စာရိုက်ပါ..." oninput="updateCount()"></textarea>
-            <div class="char-count" id="charCount">စာလုံးရေ: 0</div>
+            <label>ပြောမည့် စာသားကို ထည့်ပါ:</label>
+            <textarea name="text" id="text" placeholder="ဒီမှာ စာရိုက်ပါ..." oninput="updateCount()">{{ text if text else '' }}</textarea>
+            <div class="char-count" id="charCount">စာလုံးရေ: 0 / 15000</div>
 
             <button type="submit">အသံထုတ်လုပ်ရန် (Generate)</button>
         </form>
@@ -64,8 +60,11 @@ HTML_TEMPLATE = """
         function updateCount() {
             const text = document.getElementById('text').value;
             const count = text.length;
-            document.getElementById('charCount').innerText = "စာလုံးရေ: " + count;
+            document.getElementById('charCount').innerText = "စာလုံးရေ: " + count + " / 15000";
         }
+        window.onload = function() {
+            updateCount();
+        };
     </script>
 </body>
 </html>
@@ -74,27 +73,28 @@ HTML_TEMPLATE = """
 @app.route("/", methods=["GET", "POST"])
 def index():
     audio_file = None
+    text = ""
     if request.method == "POST":
-        text = request.form.get("text")
+        text = request.form.get("text", "")
         voice = request.form.get("voice", "my-MM-NilarNeural")
         rate = request.form.get("rate", "+0%")
-        
+
         if text:
             output_path = "output.mp3"
             async def generate():
                 communicate = edge_tts.Communicate(text, voice, rate=rate)
                 await communicate.save(output_path)
-            
+
             asyncio.run(generate())
             audio_file = "/audio"
 
-    return HTML_TEMPLATE.replace("{% if audio_file %}", "" if audio_file else "<!--").replace("{% endif %}", "" if audio_file else "-->").replace("{{ audio_file }}", "/audio" if audio_file else "")
+    return render_template_string(HTML_TEMPLATE, audio_file=audio_file, text=text)
 
 @app.route("/audio")
-def get_audio():
+def audio():
     if os.path.exists("output.mp3"):
         return send_file("output.mp3", mimetype="audio/mp3")
-    return "No audio found", 404
+    return "Audio not found", 404
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
