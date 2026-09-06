@@ -1,9 +1,23 @@
 import asyncio
 import os
-from flask import Flask, render_template_string, request, send_file
+import time
+import uuid
+from flask import Flask, render_template_string, request, send_file, abort
 import edge_tts
 
 app = Flask(__name__)
+
+# အသုံးပြုပြီးသား ဖိုင်ဟောင်းများကို ၁ နာရီတစ်ကြိမ် စစ်ဆေးဖျက်ဆီးရန် (ဆာဗာမပြည့်စေရန်)
+def cleanup_old_files():
+    for f in os.listdir('.'):
+        if f.endswith('.mp3') and f != 'output.mp3':
+            try:
+                file_path = os.path.join('.', f)
+                # ၁ နာရီ (စက္ကန့် ၃၆၀၀) ကျော်သွားပြီဆိုရင် ဖျက်မယ်
+                if time.time() - os.path.getmtime(file_path) > 3600:
+                    os.remove(file_path)
+            except Exception:
+                pass
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -84,20 +98,28 @@ def index():
         rate = request.form.get("rate", "+0%")
 
         if text:
-            output_path = "output.mp3"
+            cleanup_old_files()
+            # တစ်ယောက်နဲ့တစ်ယောက် ဖိုင်နာမည်မတူအောင် သီးသန့် ID ဖန်တီးခြင်း
+            unique_filename = f"output_{uuid.uuid4().hex}.mp3"
+            output_path = unique_filename
+
             async def generate():
                 communicate = edge_tts.Communicate(text, voice, rate=rate)
                 await communicate.save(output_path)
 
             asyncio.run(generate())
-            audio_file = "/audio"
+            audio_file = f"/audio/{unique_filename}"
 
     return render_template_string(HTML_TEMPLATE, audio_file=audio_file, text=text, voice=voice, rate=rate)
 
-@app.route("/audio")
-def audio():
-    if os.path.exists("output.mp3"):
-        return send_file("output.mp3", mimetype="audio/mp3")
+@app.route("/audio/<filename>")
+def audio(filename):
+    # လုံခြုံရေးအတွက် mp3 ဖိုင်တွေချို့ကိုသာ ခွင့်ပြုရန်
+    if not filename.endswith('.mp3'):
+        abort(404)
+    file_path = os.path.join('.', filename)
+    if os.path.exists(file_path):
+        return send_file(file_path, mimetype="audio/mp3")
     return "Audio not found", 404
 
 if __name__ == "__main__":
