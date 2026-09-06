@@ -31,14 +31,15 @@ HTML_TEMPLATE = """
         <form method="POST">
             <label>အသံအမျိုးအစား ရွေးရန်:</label>
             <select name="voice">
-                <option value="my-MM-NilarNeural">မြန်မာ (Nilar - အမျိုးသမီး)</option>
+                <option value="my-MM-NilarNeural" {% if voice == 'my-MM-NilarNeural' %}selected{% endif %}>မြန်မာ (Nilar - အမျိုးသမီး)</option>
+                <option value="my-MM-ThihaNeural" {% if voice == 'my-MM-ThihaNeural' %}selected{% endif %}>မြန်မာ (Thiha - အမျိုးသား)</option>
             </select>
 
             <label>အသံအမြန်နှုန်း (Speed):</label>
             <select name="rate">
-                <option value="+0%">+0% (ပုံမှန်)</option>
-                <option value="+10%">+10% (အနည်းငယ်မြန်)</option>
-                <option value="-10%">-10% (အနည်းငယ်နှေး)</option>
+                <option value="+0%" {% if rate == '+0%' %}selected{% endif %}>+0% (ပုံမှန်)</option>
+                <option value="+10%" {% if rate == '+10%' %}selected{% endif %}>+10% (အနည်းငယ်မြန်)</option>
+                <option value="-10%" {% if rate == '-10%' %}selected{% endif %}>-10% (အနည်းငယ်နှေး)</option>
             </select>
 
             <label>ပြောမည့် စာသားကို ထည့်ပါ:</label>
@@ -74,6 +75,9 @@ HTML_TEMPLATE = """
 def index():
     audio_file = None
     text = ""
+    voice = "my-MM-NilarNeural"
+    rate = "+0%"
+    
     if request.method == "POST":
         text = request.form.get("text", "")
         voice = request.form.get("voice", "my-MM-NilarNeural")
@@ -88,7 +92,7 @@ def index():
             asyncio.run(generate())
             audio_file = "/audio"
 
-    return render_template_string(HTML_TEMPLATE, audio_file=audio_file, text=text)
+    return render_template_string(HTML_TEMPLATE, audio_file=audio_file, text=text, voice=voice, rate=rate)
 
 @app.route("/audio")
 def audio():
